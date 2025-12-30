@@ -1,0 +1,17 @@
+# plex-ingressroute.yaml  - for deployments using Traefik - Version 3 Minumum Required
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: plex-ingressroute
+  namespace: plex # This Must be configured for your cluster setup
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`plex.example.com`) # This Must be configured for your cluster setup
+      kind: Rule
+      services:
+        - name: plex # This Must be configured for your cluster setup
+          port: 32400 # This Must be configured for your cluster setup
+  tls:
+    secretName: plex-certificate-secret  # This Must be configured for your cluster setup

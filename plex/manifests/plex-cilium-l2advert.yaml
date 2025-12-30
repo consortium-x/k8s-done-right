@@ -1,0 +1,16 @@
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: plex-l2advert
+spec:
+  nodeSelector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: DoesNotExist
+
+  serviceSelector:
+    matchLabels:
+      io.kubernetes.service.namespace: plex # This Must be configured for your cluster setup
+
+  externalIPs: true
+  loadBalancerIPs: true

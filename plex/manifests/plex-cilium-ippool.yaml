@@ -1,0 +1,11 @@
+apiVersion: "cilium.io/v2"
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: "plex-pool"
+spec:
+  blocks:
+  - start: ''  # This Must be configured for your cluster setup
+    stop: ''   # This Must be configured for your cluster setup
+  serviceSelector:
+    matchLabels:
+      "io.kubernetes.service.namespace": "plex" # This Must be configured for your cluster setup

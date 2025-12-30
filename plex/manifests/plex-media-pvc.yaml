@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex-media
+  namespace: plex
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: '' # This Must be configured for your cluster setup
+  resources:
+    requests:
+      storage: 20Ti # This Must be configured for your cluster setup
