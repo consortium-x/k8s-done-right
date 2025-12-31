@@ -6,7 +6,7 @@ entries:
       artifacthub.io/prerelease: "false"
     apiVersion: v2
     appVersion: latest
-    created: "2025-12-31T00:20:51.240474972Z"
+    created: "2025-12-31T00:31:10.494841697Z"
     description: 'Plex Media Server deployed on Kubernetes with an optional SMB sidecar
       for media ingestion, designed for RWX storage and rescheduling. '
     digest: 9107e2c6688bdc207bf5a59ff87a448844f9a0f812f028809134d659239b67d8
@@ -28,6 +28,6 @@ entries:
     - https://helm.sh
     type: application
     urls:
-    - https://consortium-x.github.io/k8s-done-right/plex-0.1.0.tgz
+    - plex-0.1.0.tgz
     version: 0.1.0
-generated: "2025-12-31T00:20:51.2321302Z"
+generated: "2025-12-31T00:31:10.489099189Z"
