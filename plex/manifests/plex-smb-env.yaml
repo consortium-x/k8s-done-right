@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: plex-smb-env
-  namespace: plex # This Must be configured for your cluster setup
-data:
-  USERID: "1000"
-  GROUPID: "1000"
