@@ -7,7 +7,7 @@ entries:
       artifacthub.io/prerelease: "false"
     apiVersion: v2
     appVersion: latest
-    created: "2025-12-31T02:17:28.717768831Z"
+    created: "2025-12-31T02:18:38.191593948Z"
     description: 'This Helm Chart deploys a Plex Media Server on Kubernetes with an
       optional SMB sidecar for media ingestion, designed for RWX storage and rescheduling. '
     digest: b362de172b1a67c1f63a3eeb9103a4ff94933426c252803ff875739d94a55ad6
@@ -32,4 +32,4 @@ entries:
     urls:
     - https://consortium-x.github.io/k8s-done-right/plex-smb-0.1.0.tgz
     version: 0.1.0
-generated: "2025-12-31T02:17:28.712223982Z"
+generated: "2025-12-31T02:18:38.186307159Z"
