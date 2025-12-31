@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: plex-smb-entrypoint
+  namespace: plex # This Must be configured for your cluster setup
+data:
+  entrypoint.sh: |
+    #!/bin/sh
+    set -e
+
+    exec samba.sh \
+      -s "media;/media;yes;no;no;${SMB_USER}" \
+      -u "${SMB_USER};${SMB_PASS}" \
+      -p

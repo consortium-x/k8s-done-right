@@ -1,0 +1,611 @@
+# ============================================================================
+# Plex Media Server plus Samba Sidecar Helm Chart — Values File
+# ============================================================================
+# SPDX-License-Identifier: MIT
+#
+# Copyright (c) 2025–present Consortium X Ltd
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# ---------------------------------------------------------------------------
+# Upstream Software Acknowledgements
+# ---------------------------------------------------------------------------
+# This Helm chart does NOT distribute or modify upstream software.
+# It provides Kubernetes orchestration only.
+#
+# The following projects are referenced and used at runtime:
+#
+# - Plex Media Server
+#   © Plex, Inc. — https://www.plex.tv
+#   Container image: linuxserver/plex
+#   Plex is a registered trademark of Plex, Inc.
+#
+# - Samba (SMB/CIFS Server)
+#   Container image: dperson/samba
+#   © dperson — https://github.com/dperson/samba
+#
+# - Helm
+#   © The Helm Authors — https://helm.sh
+#   Used as the package manager and templating engine
+#
+# All trademarks, copyrights, and licenses remain the property of their
+# respective owners. This project is not affiliated with, endorsed by,
+# or sponsored by Plex, Inc., linuxserver.io, dperson, or the Helm project.
+#
+# ---------------------------------------------------------------------------
+# Design Philosophy
+# ---------------------------------------------------------------------------
+# This chart is designed to align with Kubernetes’ native scheduling,
+# rescheduling, and self-healing behaviour.
+#
+# The goal is reliability through correct primitives, not workarounds.
+#
+# Key ideas:
+# - Pods are expected to move
+# - Nodes are expected to fail
+# - Storage and hardware must support that reality
+#
+# ---------------------------------------------------------------------------
+# Key Principles
+# ---------------------------------------------------------------------------
+# GPU usage:
+# - GPU access is requested via standard Kubernetes resources
+#   (e.g. nvidia.com/gpu)
+# - The scheduler selects an appropriate node at runtime
+# - No fixed node pinning is required for Plex-style workloads
+#
+# Storage:
+# - ReadWriteMany (RWX) storage is REQUIRED for this chart
+# - Plex configuration data must survive pod rescheduling
+# - Media storage must be accessible to both Plex and the SMB sidecar
+#
+# Without RWX:
+# - A rescheduled pod may fail to attach storage
+# - Plex may start as a new server instance
+# - Media access may be interrupted
+#
+# ---------------------------------------------------------------------------
+# Required Storage Capabilities
+# ---------------------------------------------------------------------------
+# The following storage backends are known to work when configured
+# with an RWX-capable StorageClass:
+#
+# - CephFS (Rook Ceph or external Ceph)
+# - Longhorn (with RWX enabled)
+# - NFS (via CSI driver)
+# - Cloud file systems (EFS, Azure Files, Filestore)
+#
+# The chart does not install or manage storage.
+# It assumes an existing RWX-capable StorageClass is available.
+#
+# ---------------------------------------------------------------------------
+# What This Chart Is
+# ---------------------------------------------------------------------------
+# - A Kubernetes-native deployment of Plex with an SMB sidecar
+# - Designed for rescheduling, node replacement, and scaling
+# - Suitable for single-node and multi-node clusters
+#
+# ---------------------------------------------------------------------------
+# What This Chart Is Not
+# ---------------------------------------------------------------------------
+# - Not a Plex binary distribution
+# - Not a Samba binary distribution
+# - Not intended as a drop-in replacement for Docker Compose
+# - Not intended for clusters without RWX storage
+#
+# ---------------------------------------------------------------------------
+# Operational Notes
+# ---------------------------------------------------------------------------
+# If the pod is rescheduled:
+# - Configuration remains intact provided RWX storage is available
+# - Pod rescheduling may be delayed if no GPU capacity is free
+# - Media remains available
+# - Plex does not require re-claiming
+#
+# This behaviour depends on correct storage configuration.
+# ============================================================================
+
+nameOverride: ''
+fullnameOverride: ''
+namespace: ''
+
+replicaCount: 1
+revisionHistoryLimit: 10
+progressDeadlineSeconds: 600
+rollingUpdate:
+  maxSurge: 1
+  maxUnavailable: 1
+
+
+# ===============================================================
+# GPU / HARDWARE ACCELERATION CONFIGURATION - OPTIONAL BUT POWERFUL
+# ===============================================================
+# This chart supports hardware-accelerated transcoding (HW transcoding) in Plex
+# for significantly lower CPU usage and better performance (especially 4K/HDR).
+#
+# Plex (linuxserver/plex image) supports:
+#   - NVIDIA (NVENC/NVDEC) → most common, best quality/efficiency
+#   - Intel Quick Sync (QSV) → great on recent Intel CPUs/Arc GPUs
+#   - AMD (VAAPI/ROCm) → supported but less tested, "as is" per Plex docs
+#
+# REQUIREMENTS TO MAKE GPU WORK IN KUBERNETES:
+#   1. Install the appropriate device plugin on your cluster:
+#      - NVIDIA → NVIDIA GPU Operator or k8s-device-plugin (recommended)
+#      - Intel → intel-device-plugins-for-kubernetes (for i915 or Arc)
+#      - AMD → AMD GPU Operator or ROCm device plugin
+#   2. Nodes with GPU(s) must be labeled correctly (e.g. nvidia.com/gpu=true)
+#   3. Plex must have Plex Pass (required for HW transcoding)
+#   4. Enable "Use hardware acceleration when available" in Plex Settings > Transcoder
+#
+# HOW TO CONFIGURE (pick ONE approach):
+#   - Use gpu.selector to target nodes with your GPU(s)
+#   - Use runtimeClass if your cluster requires a specific runtime (e.g. nvidia, rocm)
+#   - IMPORTANT: Add GPU resources (e.g. nvidia.com/gpu: 1)
+#     → This chart does NOT auto-add any GPU resource to avoid vendor assumptions
+#
+# NOTE:
+# Plex uses NVENC/NVDEC (driver-level APIs), NOT CUDA.
+# GPU family selection (e.g. pascal/ampere) is NOT required.
+# Do NOT add nodeSelector unless you have a specific operational reason.
+# ===============================================================
+
+gpu:
+  enabled: false
+  runtimeClass: ''          # e.g. 'nvidia', 'rocm', '' = none
+  
+  # If using nvidia, most Kubernetes frameworks support this runtime class as standard
+  #   runtimeClass: nvidia
+  # Additional Runtime Classes may be:
+  #   runtimeClass: rocm    # if using AMD runtime
+  #   runtimeClass: custom-runtime
+
+# ===============================================================
+# Plex Service 
+# ===============================================================
+
+plex:
+  image:
+    repository: linuxserver/plex
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  resources:
+    # It is recommended to define resource limits, however the HELM standard
+    # approach is to not define defaults, so these are unset as per Helm standard
+    requests:
+      cpu: ''
+      memory: ''
+      # Uncomment for the correct GPU resource:
+      #   nvidia.com/gpu: 1
+      #   gpu.intel.com/i915: 1    # or gpu.intel.com/arc for Arc GPUs
+      #   amd.com/gpu: 1
+      #   vendor.example/gpu: 2
+    
+    limits:
+      cpu: ''
+      memory: ''
+      # GPU limits (should match requests):
+      #   nvidia.com/gpu: 1
+      #   gpu.intel.com/i915: 1
+      #   amd.com/gpu: 1
+      #   vendor.example/gpu: 2
+  
+  service:
+    enabled: true
+    type: LoadBalancer
+    port: 32400
+    annotations: {}
+  
+  transcode:
+    mountPath: /transcode
+    useMemory: true
+    memorySizeLimit: ''   # e.g. '2Gi'
+  
+  securityContext:
+    enabled: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    readOnlyRootFilesystem: false
+  
+  livenessProbe:
+    enabled: true
+    path: /identity
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  readinessProbe:
+    enabled: true
+    path: /identity
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# ===============================================================
+# SMB Service
+# ===============================================================
+
+smb:
+  enabled: true   # Disabled by setting to false if not Required
+  image:
+    repository: dperson/samba
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  service:
+    enabled: true
+    type: LoadBalancer
+    port: 445
+    annotations: {}
+  
+  securityContext:
+    enabled: true
+    runAsUser: 1000
+    runAsGroup: 1000
+  
+  resources:
+    requests:
+      cpu: ''
+      memory: ''
+    limits:
+      cpu: ''
+      memory: ''
+  
+  entrypoint: |
+    #!/bin/sh
+    set -e
+    exec samba.sh \
+      -s "media;/media;yes;no;no;${SMB_USER}" \
+      -u "${SMB_USER};${SMB_PASS}" \
+      -p
+
+# ===============================================================
+# PERSISTENCE CONFIGURATION - CRITICAL FOR PLEX + SMB SIDECAR
+# ===============================================================
+# This chart deploys Plex Media Server with an SMB sidecar container
+# that shares the /media volume. RWX access mode enables advanced features.
+#
+# WHY RWX IS REQUIRED/ENABLES:
+#
+# 1. RELIABILITY DURING RESCHEDULING:
+#    - Pod reschedules → RWO volumes cannot attach → pod stuck
+#    - RWX allows immediate attachment to new node
+#
+# 2. PRESERVE PLEX SERVER IDENTITY:
+#    - Config volume inaccessible → Plex starts fresh
+#    - Result: Lost claim, re-scan library, lost watch history
+#    - RWX preserves server identity across node changes
+#
+# 3. ENABLE MULTI-REPLICA DEPLOYMENTS (ADVANCED):
+#    - With RWX, multiple Plex pods can share same config/media
+#    - Enables: High availability, load balancing, zero-downtime updates
+#    - Requirements: GPU-less transcoding OR enough GPU nodes
+#    - Note: Plex may need tuning for multi-instance (sessions, locks)
+#
+# CRITICAL VOLUMES REQUIRING RWX:
+# - config: Plex metadata, claim token, Preferences.xml, server identity
+# - media: Shared read/write between Plex & SMB sidecar
+#
+# SUPPORTED RWX STORAGE BACKENDS:
+# - CephFS / Rook CephFS
+# - NFS CSI driver  
+# - Longhorn with RWX enabled
+# - Cloud filesystems: AWS EFS, Azure Files, Google Filestore
+#
+# TRANCODE VOLUME - USE MEMORY (RECOMMENDED):
+# - Transcodes are TEMPORARY, regenerated on demand
+# - Memory-backed (emptyDir: medium: Memory) provides:
+#   → Blazing fast read/write (RAM speed)
+#   → No SSD wear from constant transcoding
+#   → Automatic cleanup on pod termination
+#   → Multi-replica compatible (each pod gets own memory)
+# - Only use PVC if you need transcodes to survive pod restart
+#   (Rare case: Very slow media + frequent pod restarts)
+#
+# MULTI-REPLICA CONSIDERATIONS:
+# ✅ Enabled by: RWX volumes + memory-backed transcode
+# ✅ Possible with: CPU transcoding (plex.transcode.useMemory: true)
+# ✅ Possible with: Sufficient GPU nodes (gpu.enabled: true + node affinity)
+# ⚠️  Requires: Plex tuning for concurrent access (database locks)
+#
+# IF YOUR CLUSTER LACKS RWX SUPPORT:
+#   1. Override accessModes to ReadWriteOnce
+#   2. Pin pod to single node using nodeSelector/affinity
+#   3. Accept: Single replica only, manual recovery on node failure
+#   4. Risk losing Plex server identity on reschedule
+# ===============================================================
+
+persistence:
+  # ============ CONFIG VOLUME (PLEX METADATA - CRITICAL!) ============
+  config:
+    enabled: true                    # REQUIRED: Stores Plex server identity
+    existingClaim: ""                # Use existing PVC (empty = create new)
+    storageClassName: ""             # RWX-capable storage class
+    accessModes:
+      - ReadWriteMany                # REQUIRED: Enables reliability + multi-replica
+    size: 5Gi                        # Adjust based on library size
+    annotations: {}                  # Optional PVC annotations
+
+  # ============ MEDIA VOLUME (SHARED PLEX+SMB) ============
+  media:
+    enabled: true                    # REQUIRED: Shared media storage
+    existingClaim: ""                # Use existing PVC (empty = create new)
+    storageClassName: ""             # RWX-capable storage class
+    accessModes:
+      - ReadWriteMany                # REQUIRED: Shared access + multi-replica
+    size: 20Gi                       # Default, adjust for your media library
+    annotations: {}                  # Optional PVC annotations
+
+  # ============ TRANSCODE VOLUME (LEGACY - NOT RECOMMENDED) ============
+  transcode:
+    enabled: false                   # DISABLED: Use memory-backed transcode instead
+    existingClaim: ""                # Only for legacy single-replica setups
+    storageClassName: ""             # Not needed with memory transcode
+    accessModes:
+      - ReadWriteOnce                # Limits to single replica
+    size: 10Gi                       # Legacy setting
+    annotations: {}                  # Optional PVC annotations
+
+# ===============================================================
+# ENVIRONMENT CONFIGURATION - CONVERTED TO CONFIGMAP(S)
+# ===============================================================
+# These values are passed as environment variables to containers via ConfigMaps.
+# 
+# CONTAINER-SPECIFIC NOTES:
+#
+# PLEX CONTAINER (linuxserver/plex):
+#   - PUID/PGID: Must match the user/group that owns your mounted volumes
+#     → Run `id your_username` on the host to find correct values
+#     → Prevents permission denied errors on config & media files
+#   - TZ: Timezone for logs, timestamps, and scheduling
+#   - PLEX_LOG_LEVEL: Controls server logging verbosity
+#     Valid: quiet, critical, error, warning, info (default), debug, verbose
+#   - Additional env vars: See https://hub.docker.com/r/linuxserver/plex
+#
+# SMB SIDECAR (dperson/samba):
+#   - USERID/GROUPID: Control ownership of files created by Samba
+#   - Should match PUID/PGID for consistent file ownership on shared volumes
+#   - Additional env vars: See https://hub.docker.com/r/dperson/samba
+#
+# OWNERSHIP BEST PRACTICES:
+#   → Keep uid/gid consistent across Plex & SMB unless you have specific needs
+#   → This ensures consistent file ownership on shared RWX volumes
+#   → Default 1000:1000 works for most setups (common non-root user)
+#
+# CONFIGURATION EXAMPLES:
+#
+# Example 1: Standard home user (most common)
+#   uid: 1000
+#   gid: 1000
+#   smb.userid: 1000
+#   smb.groupid: 1000
+#
+# Example 2: Custom user (e.g., media server user)
+#   uid: 1001
+#   gid: 1001
+#   smb.userid: 1001
+#   smb.groupid: 1001
+#
+# Example 3: Advanced - Plex in media group, SMB in users group
+#   uid: 1000
+#   gid: 44           # 'media' group
+#   smb.userid: 1000
+#   smb.groupid: 100  # 'users' group
+#
+# Example 4: Root operation (NOT RECOMMENDED)
+#   uid: 0
+#   gid: 0
+#   smb.userid: 0
+#   smb.groupid: 0
+# ============ ADDITIONAL ENVIRONMENT VARIABLES ============
+# OPTIONAL: Additional environment variables for containers
+# Format: name: value pairs (strings only)
+# 
+# Common Plex options:
+#   - VERSION: "docker" (labels as Docker container in Plex UI)
+#   - UMASK_SET: "022" (file permission mask)
+#   - PLEX_UID: "1000" (alternative to PUID)
+#   - PLEX_GID: "1000" (alternative to PGID)
+#
+# Common SMB options:
+#   - WORKGROUP: "WORKGROUP"
+#   - DOMAIN: "" (Active Directory domain)
+#
+#   - Custom user (e.g. uid 1001, gid 1001):
+#     uid: 1001
+#     gid: 1001
+#     smb.userid: 1001
+#     smb.groupid: 1001
+#
+#   - Advanced: Different groups (e.g. Plex in media group 44, SMB in users 100):
+#     uid: 1000
+#     gid: 44
+#     smb.userid: 1000
+#     smb.groupid: 100
+# ===============================================================
+# ===============================================================
+config:
+  # ============ PLEX ENVIRONMENT ============
+  plex:
+    timezone: "UTC"                     # Timezone (e.g., "Europe/London", "America/New_York")
+    uid: 1000                           # PUID - User ID for Plex container (0 = root)
+    gid: 1000                           # PGID - Group ID for Plex container (0 = root)
+    plexLogLevel: "info"                # Log level: quiet|critical|error|warning|info|debug|verbose
+  #  VERSION: "docker"
+  #  UMASK_SET: "022"
+  #  ALLOWED_NETWORKS: "192.168.1.0/24"  
+  # ============ SMB SIDECAR ENVIRONMENT ============
+  smb:
+    userid: 1000                      # USERID - User ID for Samba server
+    groupid: 1000                     # GROUPID - Group ID for Samba server
+  #  WORKGROUP: "WORKGROUP"
+  #  DOMAIN: ""
+  #  RECYCLE: "true"  
+  
+# ===============================================================
+# SECRETS CONFIGURATION - SENSITIVE DATA HANDLING
+# ===============================================================
+# This section controls creation and population of a Kubernetes Secret
+# containing sensitive values for Plex and the SMB sidecar.
+#
+# Key secrets:
+#   - PLEX_CLAIM: One-time claim token from https://www.plex.tv/claim
+#     → Expires in ~4 minutes after generation!
+#     → Only needed for FIRST-TIME setup or after major account changes
+#     → After successful claim, REMOVE IT immediately to avoid re-claim issues
+#
+#   - SMB_USER & SMB_PASS: Credentials for the SMB server sidecar
+#     → Used by dperson/samba to authenticate users
+#     → Consider using External Secrets/Sealed Secrets for production
+#
+# CONFIGURATION OPTIONS:
+#   Option A: Chart-managed secret (simple, for initial setup)
+#     secrets.create: true
+#     secrets.name: "" (defaults to release-name-plex-secrets)
+#     Fill in secrets.data.* values below
+#
+#   Option B: User-managed secret (recommended for production)
+#     secrets.create: false
+#     secrets.name: "your-existing-secret-name" (REQUIRED)
+#     secrets.data values are ignored (manage secret externally)
+#
+# EXAMPLE WORKFLOW:
+#   1. Generate PLEX_CLAIM at https://www.plex.tv/claim
+#   2. Install: helm install plex . --set secrets.create=true \
+#        --set secrets.data.PLEX_CLAIM="claim_xxxxxxxx" \
+#        --set secrets.data.SMB_USER="username" \
+#        --set secrets.data.SMB_PASS="password"
+#   3. Wait for Plex to claim (check pod logs)
+#   4. Upgrade: helm upgrade plex . --set secrets.create=false \
+#        --set secrets.data.PLEX_CLAIM=""
+#   5. Manage SMB_USER/SMB_PASS via external secret system
+#
+# SECURITY NOTES:
+#   - Never commit actual secret values to version control
+#   - Use --set or values files with restricted permissions
+#   - Consider HashiCorp Vault, Sealed Secrets, or External Secrets operator
+# ===============================================================
+secrets:
+  # CREATE MODE: true = chart creates secret, false = use existing secret
+  # Default: false (security best practice)
+  create: false
+  
+  # SECRET NAME: 
+  #   - If create=true and empty → {{ .Release.Name }}-plex-secrets
+  #   - If create=false → MUST provide existing secret name
+  name: ""
+  
+  # SECRET DATA: Only used when create=true
+  #   - Values are base64-encoded by Helm when creating secret
+  #   - For create=false, manage these values in your external secret
+  data:
+    PLEX_CLAIM: ""      # One-time Plex claim token (expires in ~4 min)
+    SMB_USER: ""        # Username for SMB/CIFS access
+    SMB_PASS: ""        # Password for SMB/CIFS access
+
+# ===============================================================
+# INGRESS / EXPOSURE CONFIGURATION - SELECTABLE OPTIONS
+# ===============================================================
+# This chart supports THREE independent ways to expose Plex externally (HTTP/HTTPS).
+# Enable ONLY ONE in production to avoid conflicts. Multiple can be enabled for testing/migration.
+#
+# 1. Native Kubernetes Ingress (networking.k8s.io/v1 Ingress)
+#    - Classic, widely supported (ingress-nginx, Traefik, HAProxy, NGINX, etc.)
+#    - Simple, annotation-heavy for advanced features
+#    - Use if your cluster already runs an Ingress controller
+#
+# 2. Traefik IngressRoute (traefik.io/v1alpha1 CRD - Traefik v3+)
+#    - Traefik-specific CRD (still fully supported in v3, not deprecated)
+#    - Cleaner rules, native middlewares (rate-limit, auth, headers, etc.)
+#    - Use if you run Traefik as your main ingress controller
+#
+# 3. Cilium exposure (two sub-options):
+#    - Cilium Ingress (uses classic Ingress resource + Cilium's built-in Envoy)
+#      → Enable via ingress.enabled + your cluster has Cilium Ingress configured
+#    - Cilium Gateway API (HTTPRoute + Gateway)
+#      → Modern, role-based, future-proof (preferred for new Cilium setups)
+#      → Uses gatewayApi.enabled + httpRoute.enabled
+#
+# SHARED VALUES (used by all variants where applicable):
+#   - hosts: list of hostnames
+#   - tls: list of TLS configs (secretName, hosts)
+#   - annotations: common annotations (e.g. cert-manager, external-dns)
+#
+# CERT-MANAGER INTEGRATION (optional, shared):
+#   - cert.enabled → creates Certificate resource
+#   - Works with all variants (references the same secretName)
+#
+# RECOMMENDATION 2025:
+#   - New clusters / Cilium users → prefer Gateway API
+#   - Existing Traefik setups → use IngressRoute
+#   - Legacy / simple → classic Ingress
+#   - Always remove PLEX_CLAIM after first claim regardless of exposure method
+# ===============================================================
+ingress:
+  enabled: false                      # Classic Kubernetes Ingress
+  className: ''                       # nginx | traefik | cilium | etc
+  annotations: {}
+  hosts: []                           # [{ host, paths }]
+  tls: []                             # [{ secretName, hosts }]
+
+traefik:
+  enabled: false                      # Traefik IngressRoute
+  entryPoints:
+    - websecure
+  match: 'Host(`plex.example.com`)'   # Traefik rule
+  annotations: {}
+  tlsSecretName: ''                   # User-provided secret
+
+gatewayApi:
+  enabled: false                      # Gateway API support
+
+  gateway:
+    name: plex-gateway
+    gatewayClass: ''
+    listeners:                        # MUST be a list
+      - name: plex-http
+        hostname: plex.example.com
+        port: 80
+        protocol: HTTP
+      - name: plex-https
+        hostname: plex.example.com
+        port: 443
+        protocol: HTTPS
+        tls:
+          certificateRefs:
+            - name: ''                # User-provided certifiacte name
+  httpRoute:
+    enabled: false
+    name: plex-httproute
+    hostnames:
+      - plex.example.com
+    parentRefs:
+      - name: plex-gateway
+    rules:
+      - matches:
+          - path:
+              type: PathPrefix
+              value: /
+        backendRefs:
+          - name: ''                  # default to release fullname
+            port: 32400
+ 
+affinity: {}
+tolerations: []
+nodeSelector: {}
+
+podSecurityContext: {}
+
+serviceAccount:
+  create: false
+  name: ''

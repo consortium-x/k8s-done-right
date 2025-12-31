@@ -1,0 +1,33 @@
+apiVersion: v2
+name: plex
+description: >
+  Plex Media Server deployed on Kubernetes with an optional SMB sidecar
+  for media ingestion, designed for RWX storage and rescheduling.
+
+type: application
+
+version: 0.1.0
+appVersion: "latest"
+
+keywords:
+  - plex
+  - media
+  - streaming
+  - smb
+  - homelab
+  - kubernetes
+
+home: https://www.plex.tv
+
+sources:
+  - https://github.com/linuxserver/docker-plex
+  - https://hub.docker.com/r/dperson/samba
+  - https://helm.sh
+
+maintainers:
+  - name: Consortium X Ltd
+    url: https://consortiumx.co.uk
+
+annotations:
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/license: MIT

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex
+  namespace: plex # This Must be configured for your cluster setup
+spec:
+  type: LoadBalancer
+  selector:
+    app: plex
+  ports:
+  - name: plex
+    port: 32400
+    targetPort: 32400
+    protocol: TCP
+

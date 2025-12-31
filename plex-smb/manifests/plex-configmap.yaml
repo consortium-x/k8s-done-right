@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: plex-config
+  namespace: plex
+data:
+  TZ: "Europe/London" # This Must be configured for your cluster setup
+  PUID: "1000"        # This Must be configured for your cluster setup
+  PGID: "1000"        # This Must be configured for your cluster setup
+
+  # Optional but commonly useful
+  PLEX_LOG_LEVEL: "info"
