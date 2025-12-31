@@ -27,7 +27,7 @@ sources:
 maintainers:
   - name: Consortium X Ltd
     url: https://consortiumx.co.uk
-
+icon: https://www.plex.tv/wp-content/uploads/2018/01/pmp-icon-1.png
 annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/license: MIT
