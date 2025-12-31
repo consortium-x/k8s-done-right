@@ -1,7 +1,7 @@
 apiVersion: v2
-name: plex
+name: plex-smb
 description: >
-  Plex Media Server deployed on Kubernetes with an optional SMB sidecar
+  This Helm Chart deploys a Plex Media Server on Kubernetes with an optional SMB sidecar
   for media ingestion, designed for RWX storage and rescheduling.
 
 type: application
@@ -31,3 +31,4 @@ maintainers:
 annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/license: MIT
+  artifacthub.io/logo-url: "https://www.plex.tv/wp-content/uploads/2018/01/pmp-icon-1.png"
